@@ -1,0 +1,267 @@
+<html>
+<head>
+<title>Kanji Viewer</title>
+</head>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" rel="stylesheet" type="text/css" />
+
+<style type="text/css">
+#mynetwork {
+	width: 100%;
+	height: 100%;
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 0;
+}
+#publishDetails {
+	z-index: 10;
+	position:absolute;
+	left: 50%;
+	bottom:0;
+	right:0;
+}
+#draw {
+	width: 240px;
+	height: 135px;
+	margin: 0 auto;
+	background-repeat: no-repeat;
+}
+#button {
+	line-height: 12px;
+	width: 18px;
+	font-size: 8pt;
+	font-family: tahoma;
+	margin-top: 1px;
+	margin-right: 2px;
+	position:absolute;
+	bottom:0;
+	left:0;
+	z-index: 1;
+ }
+</style>
+
+</head>
+<body>
+
+<!--<div id="button"><input type="button" onclick="clusterByStep()" value="Cluster"></div>-->
+<div id="mynetwork"></div>
+<!--<div id="publishDetails"></div>-->
+
+<script src="https://code.jquery.com/jquery-3.4.1.min.js" type="text/javascript"></script>
+<script src="js/utils.js" type="text/javascript"></script>
+<!--<script src="https://raw.githubusercontent.com/janl/mustache.js/v3.0.1/mustache.min.js"></script>-->
+
+<script type="text/javascript">
+
+// -------------------------------------------------------------------------------------------------------
+// Global Options
+// -------------------------------------------------------------------------------------------------------
+
+var globals = {
+	"debug" : get_from_url("debug", false),
+};
+
+
+// -------------------------------------------------------------------------------------------------------
+// HTML templates
+// -------------------------------------------------------------------------------------------------------
+
+// -------------------------------------------------------------------------------------------------------
+// Querying Shotgun and caching the entries
+// -------------------------------------------------------------------------------------------------------
+
+// -------------------------------------------------------------------------------------------------------
+// Building the graph
+// -------------------------------------------------------------------------------------------------------
+
+var network;
+var graph = {
+	nodes : new vis.DataSet([]),
+	edges : new vis.DataSet([])
+}
+
+var level_colors = {"5":"rgb(255,0,0)",
+                    "4":"rgb(0,255,0)",
+                    "3":"rgb(0,0,255)",
+                    "2":"rgb(255,0,255)",
+                    "1":"rgb(255,255,0)"
+}
+
+// create an empty graph with default options
+function create_graph(callbacks){
+ 	var container = document.getElementById('mynetwork');
+    var options = {
+            nodes: {
+                shape: 'box',
+                //margin: 10,
+                //widthConstraint: {
+                //    maximum: 200
+                //},
+                //shapeProperties: {
+                //    useBorderWithImage:true
+                //},
+                //borderWidth: 2,
+            },
+            //physics: {
+            //    enabled: false
+            //},
+            physics: {
+                forceAtlas2Based: {
+                    gravitationalConstant: -26,
+                    centralGravity: 0.005,
+                    springLength: 230,
+                    springConstant: 0.18
+                },
+                maxVelocity: 146,
+                solver: 'forceAtlas2Based',
+                timestep: 0.35,
+                stabilization: {iterations: 150}
+            }
+            //edges:{
+            //    smooth: {
+            //        type: "discrete",
+            //        forceDirection: 'horizontal',
+            //        roundness: 0.7
+            //    },
+            //},
+            //layout: {
+            //    hierarchical: {
+            //        direction: "LR",
+            //        parentCentralization: true
+            //    }
+            //},
+        };
+    network = new vis.Network(container, graph, options);
+    $.each(callbacks, function(eventName, callback){
+    	network.on(eventName, callback);
+    });
+}
+
+// convert from a vocaqb entry to a Node ID
+function entity_to_nodeid(entry){
+	return "vocab_n" + entry["level"] + "_#" + entry["index"];
+}
+
+// Create a visjs Node from a vocabulary entry
+function create_node(entry){
+    node = {
+        id: entity_to_nodeid(entry),
+        //shape: 	'image',
+        label: 	entry["kanji"] ? entry["kanji"] : entry["kana"],
+        //image: 	sg_entity["image"],
+        //level: 	get_level(sg_entity),
+        color: 	level_colors[entry["level"]],
+    	//cid:  	sg_step["id"]
+    }
+    console.log(JSON.stringify(node));
+    return node;
+}
+
+// Create nodes and edges based on the new entities loaded
+function update_graph(entries){
+    console.log("update_graph()");
+    var nodes_ = [];
+	var edges_ = [];
+	$.each(entries, function(i, entry){
+        if (entry["kanji"] != null)
+            nodes_.push(create_node(entry));
+    });
+    graph.nodes.add(nodes_);
+	graph.edges.add(edges_);
+    // recenter  the graph on the specified node
+    // network.focus(node_id);
+}
+
+function update_graph2(vocab_graph){
+    console.log("update_graph2()");
+    var nodes_ = [];
+	var edges_ = [];
+	$.each(vocab_graph["nodes"], function(i, entry){
+        if (entry["kanji"] != null)
+            nodes_.push(create_node(entry));
+    });
+    $.each(vocab_graph["edges"], function(i, entry){
+        edges_.push({from: entry[0], 
+                     to: entry[1], 
+                     //arrows:'to;from',
+                     //color:{inherit:'both'},
+                     //dashes: false
+                    });
+    });
+    graph.nodes.add(nodes_);
+	graph.edges.add(edges_);
+    // recenter  the graph on the specified node
+    // network.focus(node_id);
+}
+
+// -------------------------------------------------------------------------------------------------------
+// GIF Player
+// -------------------------------------------------------------------------------------------------------
+
+// -------------------------------------------------------------------------------------------------------
+// Actions
+// -------------------------------------------------------------------------------------------------------
+
+function on_click(params){
+}
+
+function on_doubleclick(params){
+}
+
+function on_selectnode(params){
+}
+
+// -------------------------------------------------------------------------------------------------------
+// Page Init
+// -------------------------------------------------------------------------------------------------------
+
+function load_level(level){
+    $.ajax({
+        dataType: "json",
+        url: "data/vocabulary_n" + level + ".json",
+        mimeType: "application/json",
+        success: function(result){
+            update_graph(result)
+        }
+    });
+}
+
+function load_vocabulary_graph(level){
+    $.ajax({
+        dataType: "json",
+        url: "data/vocabulary_graph_n" + level + ".json",
+        mimeType: "application/json",
+        success: function(result){
+            update_graph2(result)
+        }
+    });
+}
+
+
+function load_page(){
+	// debug print
+	if (globals["debug"])
+		console.log(JSON.stringify(globals, null, 4));
+
+	// create an empty graph
+	var callbacks = {
+		"click" : on_click,
+		"doubleClick": on_doubleclick,
+		"selectNode": on_selectnode
+	};
+	create_graph(callbacks);
+    
+    //// load vocabulary lists
+    //for (i = 5; i>0; i--) { 
+    //    load_level(i);
+    //}
+    load_vocabulary_graph(5);
+}
+
+load_page();
+
+</script>
+</body>
+</html>
